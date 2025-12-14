@@ -193,14 +193,14 @@
         </div>
         
         <div class="form-group">
-            <label>Początkowy zakres:</label>
+            <label>Początkowy poziom:</label>
             <select id="start-range">
-                <option value="0">1 - 100</option>
-                <option value="1">101 - 200</option>
-                <option value="2">201 - 300</option>
-                <option value="3">301 - 400</option>
-                <option value="4">401 - 500</option>
-                <option value="9">901 - 1000</option>
+                <option value="0">Poziom 1: Tabliczka (do 10x10)</option>
+                <option value="1">Poziom 2: Rozszerzony (do 100)</option>
+                <option value="2">Poziom 3: Zakres 101 - 200</option>
+                <option value="3">Poziom 4: Zakres 201 - 300</option>
+                <option value="4">Poziom 5: Zakres 301 - 400</option>
+                <option value="5">Poziom 6: Zakres 401 - 500</option>
             </select>
         </div>
 
@@ -230,8 +230,8 @@
         
         <div style="margin-bottom: 10px;">
             <span class="info-pill" id="op-display">Mnożenie</span>
-            <span class="info-pill" id="range-display">1-100</span>
-            <span class="info-pill" id="level-display">Poziom 1/5</span>
+            <span class="info-pill" id="range-display">Tabliczka</span>
+            <span class="info-pill" id="level-display">Czas 1/5</span>
         </div>
 
         <div class="timer-container">
@@ -272,7 +272,7 @@
                 score: 0,
                 lives: 3,
                 operation: 'multiplication',
-                currentRangeIndex: 0, 
+                currentRangeIndex: 0, // 0=Basic, 1=Extended, 2=101-200...
                 timeLevel: 1, 
                 questionIndex: 0,
                 currentQuestion: null,
@@ -374,64 +374,151 @@
                 if (this.state.isEasyMode) rangeBonus = rangeBonus / 2;
                 this.state.score += rangeBonus;
                 
-                const start = this.state.currentRangeIndex * 100 + 1;
-                const end = (this.state.currentRangeIndex + 1) * 100;
-                alert(`Gratulacje! Przechodzisz do wyższego zakresu: ${start}-${end}!`);
+                // Opis nowego poziomu
+                let msg = "";
+                if (this.state.currentRangeIndex === 1) msg = "Awans! Teraz trudniejsze działania (wciąż do 100).";
+                else {
+                    const start = (this.state.currentRangeIndex - 1) * 100 + 1;
+                    const end = this.state.currentRangeIndex * 100;
+                    msg = `Awans! Przechodzisz do zakresu: ${start}-${end}!`;
+                }
+                alert(msg);
                 this.nextQuestion();
             }
         }
 
         generateMathProblem() {
-            const rangeStart = (this.state.currentRangeIndex * 100) + 1;
-            const rangeEnd = (this.state.currentRangeIndex + 1) * 100;
-            
+            const idx = this.state.currentRangeIndex;
             let a, b, symbol, answer;
-            let target;
 
-            // Logika generowania: Staramy się, aby WYNIK (lub kluczowy składnik) był w zakresie
-            switch (this.state.operation) {
-                case 'multiplication':
-                    symbol = '×';
+            // --- MNOŻENIE ---
+            if (this.state.operation === 'multiplication') {
+                symbol = '×';
+                
+                if (idx === 0) {
+                    // Poziom 0: Klasyczna tabliczka (2-10) x (2-10)
+                    a = Math.floor(Math.random() * 9) + 2;
+                    b = Math.floor(Math.random() * 9) + 2;
+                } 
+                else if (idx === 1) {
+                    // Poziom 1: Rozszerzony do 100 (np. 4x15)
+                    // Wynik <= 100, ale jeden czynnik > 10
                     do {
-                        target = Math.floor(Math.random() * (rangeEnd - rangeStart + 1)) + rangeStart;
-                        // Szukamy czynników
+                        // Losujemy jeden czynnik duży (11-50)
+                        a = Math.floor(Math.random() * 40) + 11;
+                        // Obliczamy max drugiego czynnika, żeby wynik <= 100
+                        const maxB = Math.floor(100 / a);
+                        if (maxB < 2) { a = null; continue; } // Jeśli nie da się mnożyć, ponów
+                        b = Math.floor(Math.random() * (maxB - 1)) + 2;
+                    } while(!a);
+                    
+                    // Losowo zamień miejscami, żeby nie zawsze pierwszy był duży
+                    if (Math.random() > 0.5) [a, b] = [b, a];
+                } 
+                else {
+                    // Poziom 2+: Standardowe zakresy (101-200 itd.)
+                    const start = (idx - 1) * 100 + 1;
+                    const end = idx * 100;
+                    
+                    do {
+                        answer = Math.floor(Math.random() * (end - start + 1)) + start;
                         const factors = [];
-                        for(let i=2; i <= Math.sqrt(target); i++) {
-                            if (target % i === 0) factors.push([i, target/i]);
+                        for(let i=2; i <= Math.sqrt(answer); i++) {
+                            if (answer % i === 0) factors.push([i, answer/i]);
                         }
                         if (factors.length > 0) {
                             const pair = factors[Math.floor(Math.random() * factors.length)];
                             [a, b] = Math.random() > 0.5 ? [pair[0], pair[1]] : [pair[1], pair[0]];
-                            answer = target;
                         } else {
-                            a = null; // liczba pierwsza, ponów
+                            a = null;
                         }
                     } while (!a);
-                    break;
+                }
+                answer = a * b;
+            } 
 
-                case 'division':
-                    symbol = ':';
-                    // Wynik (iloraz) ma być w zakresie. Dzielnik losowy mały. Dzielna wyliczona.
-                    answer = Math.floor(Math.random() * (rangeEnd - rangeStart + 1)) + rangeStart;
-                    b = Math.floor(Math.random() * 9) + 2; // dzielnik 2-10
+            // --- DZIELENIE ---
+            else if (this.state.operation === 'division') {
+                symbol = ':';
+                
+                if (idx === 0) {
+                    // Poziom 0: Klasyczne (wynik <= 10, dzielna <= 100)
+                    b = Math.floor(Math.random() * 9) + 2; // dzielnik
+                    answer = Math.floor(Math.random() * 9) + 2; // wynik
                     a = answer * b;
-                    break;
+                }
+                else if (idx === 1) {
+                    // Poziom 1: Rozszerzone do 100 (wynik > 10 lub dzielnik > 10)
+                    do {
+                       a = Math.floor(Math.random() * 89) + 12; // Dzielna > 11 i <= 100
+                       const factors = [];
+                       for(let i=2; i < a; i++) {
+                           if (a % i === 0) factors.push(i);
+                       }
+                       if (factors.length > 0) {
+                           b = factors[Math.floor(Math.random() * factors.length)];
+                           answer = a / b;
+                           // Warunek: albo wynik, albo dzielnik musi być > 10 (żeby było trudniej niż w poz 0)
+                           if (b <= 10 && answer <= 10) a = null;
+                       } else {
+                           a = null;
+                       }
+                    } while (!a);
+                }
+                else {
+                    // Poziom 2+: Dzielna w zakresie 101-200 itd.
+                    const start = (idx - 1) * 100 + 1;
+                    const end = idx * 100;
+                    answer = Math.floor(Math.random() * (end - start + 1)) + start; // Tu akurat wynik jest w zakresie... 
+                    // W grach tego typu zazwyczaj to "Dzielna" (a) wpada w zakres, a nie wynik. 
+                    // Zróbmy tak, że DZIELNA (liczba z której dzielimy) jest w zakresie.
+                    
+                    do {
+                        a = Math.floor(Math.random() * (end - start + 1)) + start;
+                        const factors = [];
+                        for(let i=2; i <= Math.sqrt(a); i++) {
+                             if (a % i === 0) {
+                                 factors.push(i);
+                                 factors.push(a/i);
+                             }
+                        }
+                        if (factors.length > 0) {
+                            b = factors[Math.floor(Math.random() * factors.length)];
+                            answer = a / b;
+                        } else {
+                            a = null;
+                        }
+                    } while(!a);
+                }
+            }
 
-                case 'addition':
-                    symbol = '+';
-                    // Suma w zakresie
-                    answer = Math.floor(Math.random() * (rangeEnd - rangeStart + 1)) + rangeStart;
-                    a = Math.floor(Math.random() * (answer - 2)) + 1; // Przynajmniej 1
-                    b = answer - a;
-                    break;
+            // --- DODAWANIE ---
+            else if (this.state.operation === 'addition') {
+                symbol = '+';
+                // Dla uproszczenia: Poz 0 = do 50, Poz 1 = 51-100, Poz 2 = 101-200...
+                let start, end;
+                if (idx === 0) { start = 5; end = 50; }
+                else if (idx === 1) { start = 51; end = 100; }
+                else { start = (idx - 1) * 100 + 1; end = idx * 100; }
 
-                case 'subtraction':
-                    symbol = '-';
-                    // Różnica w zakresie
-                    answer = Math.floor(Math.random() * (rangeEnd - rangeStart + 1)) + rangeStart;
-                    b = Math.floor(Math.random() * 50) + 1; // Odjemnik 1-50
-                    a = answer + b;
-                    break;
+                answer = Math.floor(Math.random() * (end - start + 1)) + start;
+                a = Math.floor(Math.random() * (answer - 2)) + 1;
+                b = answer - a;
+            }
+
+            // --- ODEJMOWANIE ---
+            else if (this.state.operation === 'subtraction') {
+                symbol = '-';
+                let start, end;
+                if (idx === 0) { start = 5; end = 50; }
+                else if (idx === 1) { start = 51; end = 100; }
+                else { start = (idx - 1) * 100 + 1; end = idx * 100; }
+
+                answer = Math.floor(Math.random() * (end - start + 1)) + start;
+                // W odejmowaniu: a - b = answer. 
+                // Żeby było trudniej, niech 'a' (odjemna) będzie trochę większa od wyniku
+                b = Math.floor(Math.random() * 50) + 1; 
+                a = answer + b;
             }
 
             this.state.currentQuestion = { a, b, answer, symbol };
@@ -439,9 +526,8 @@
         }
 
         calculateMaxTime() {
-            // Podstawa: 10s, 9s, 8s, 7s, 6s
             let base = 11 - this.state.timeLevel; 
-            if (this.state.isEasyMode) base *= 2; // Podwojenie czasu
+            if (this.state.isEasyMode) base *= 2; 
             return base;
         }
 
@@ -571,9 +657,17 @@
             this.dom.score.innerText = this.state.score;
             this.dom.lives.innerText = this.state.lives;
             
-            const start = this.state.currentRangeIndex * 100 + 1;
-            const end = (this.state.currentRangeIndex + 1) * 100;
-            this.dom.range.innerText = `Zakres: ${start}-${end}`;
+            const idx = this.state.currentRangeIndex;
+            let rangeText = "";
+            if (idx === 0) rangeText = "Podstawowy (do 10x10)";
+            else if (idx === 1) rangeText = "Rozszerzony (do 100)";
+            else {
+                const start = (idx - 1) * 100 + 1;
+                const end = idx * 100;
+                rangeText = `${start}-${end}`;
+            }
+
+            this.dom.range.innerText = rangeText;
             
             const opNames = {'multiplication':'Mnożenie', 'division':'Dzielenie', 'addition':'Dodawanie', 'subtraction':'Odejmowanie'};
             this.dom.opDisplay.innerText = opNames[this.state.operation];
